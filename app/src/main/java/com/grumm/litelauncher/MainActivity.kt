@@ -21,7 +21,6 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.animation.PathInterpolator
 import android.widget.LinearLayout
-import android.widget.PopupMenu
 import android.widget.TextView
 import androidx.core.view.WindowCompat
 import androidx.core.view.isVisible
@@ -76,6 +75,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
         applyWindowInsets()
         repository.start()
         contrast.start()
+        NotificationBadges.onChanged = ::onBadgesChanged
         loadInBackground()
     }
 
@@ -107,6 +107,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
     }
 
     override fun onDestroy() {
+        NotificationBadges.onChanged = null
         contrast.stop()
         repository.stop()
         executor.shutdown()
@@ -180,7 +181,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
     private fun createComponents() {
         icons = IconLoader(this, executor, mainHandler)
         pins = PinStore(this)
-        actions = AppActions(this, pins, ::renderPinned, ::hideApp)
+        actions = AppActions(this, pins, executor, mainHandler, ::renderPinned, ::hideApp)
         repository = AppRepository(this, executor, mainHandler, ::onAppsChanged)
         widgets = WidgetPanel(this, findViewById(R.id.widgets), executor, mainHandler)
         contrast = WallpaperContrast(this, executor, mainHandler, ::onContrastChanged)
@@ -284,6 +285,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
 
     private fun applySettings(updated: LauncherSettings) {
         settings = updated
+        icons.badgeStyle = updated.badgeStyle
         icons.setIconSize(updated.iconSizeDp)
         clock.setTextSize(TypedValue.COMPLEX_UNIT_SP, updated.clockSizeSp.toFloat())
         transition?.applySettings(updated)
@@ -296,6 +298,14 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
         if (uninstalled) pins.removeAll(stale.map { it.key })
         renderPinned()
         publishAppsToDrawer()
+    }
+
+    private fun onBadgesChanged() {
+        pinnedEntries.forEachIndexed { index, entry ->
+            (pinnedRow.getChildAt(index) as? TextView)?.let { icons.refreshBadge(entry, it) }
+        }
+        drawer?.refreshBadges()
+        folderPanel?.refreshBadges()
     }
 
     private fun publishAppsToDrawer() {
@@ -399,27 +409,24 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
         menuAnchor.x = x
         menuAnchor.y = y
         menuAnchor.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        PopupMenu(this, menuAnchor).apply {
-            menu.add(0, ITEM_WIDGET, 0, R.string.menu_add_widget)
-            menu.add(0, ITEM_WALLPAPER, 1, R.string.menu_wallpaper)
-            menu.add(0, ITEM_SETTINGS, 2, R.string.menu_settings)
-            setOnMenuItemClickListener { onHomeMenuItem(it.itemId) }
-            show()
-        }
+        // Якорь двигается свойствами x и y: разметка до показа меню ещё не обновилась, но они уже учтены.
+        ActionPopup.show(
+            menuAnchor,
+            listOf(
+                ActionPopup.Row(getString(R.string.menu_add_widget)) { widgets.showPicker() },
+                ActionPopup.Row(getString(R.string.menu_wallpaper), action = ::openWallpaperChooser),
+                ActionPopup.Row(getString(R.string.menu_settings), action = ::openSettings),
+            ),
+        )
     }
 
-    private fun onHomeMenuItem(itemId: Int): Boolean {
-        when (itemId) {
-            ITEM_WIDGET -> widgets.showPicker()
-            ITEM_WALLPAPER -> startActivity(
-                Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), getString(R.string.menu_wallpaper)),
-            )
-            ITEM_SETTINGS -> startActivity(
-                Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-        }
-        return true
-    }
+    private fun openWallpaperChooser() = startActivity(
+        Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), getString(R.string.menu_wallpaper)),
+    )
+
+    private fun openSettings() = startActivity(
+        Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+    )
 
     /** Публичного API нет; если система откажет, жест просто ничего не делает. */
     private fun expandNotificationShade() {
@@ -437,8 +444,5 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
         const val SHADOW_COLOR = 0x99000000.toInt()
         const val SHADOW_RADIUS = 4f
         const val SHADOW_DY = 1f
-        const val ITEM_WIDGET = 1
-        const val ITEM_WALLPAPER = 2
-        const val ITEM_SETTINGS = 3
     }
 }

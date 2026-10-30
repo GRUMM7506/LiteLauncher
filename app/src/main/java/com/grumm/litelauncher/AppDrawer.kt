@@ -75,6 +75,8 @@ class AppDrawer(
         dots.setPosition(0f)
     }
 
+    fun refreshBadges() = adapter.refreshBadges()
+
     /** Отдаёт страницы и их битмапы при нехватке памяти. Следующий показ создаст их заново. */
     fun releaseViews() {
         list.adapter = null

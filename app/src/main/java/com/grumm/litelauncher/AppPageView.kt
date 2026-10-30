@@ -41,6 +41,16 @@ class AppPageView(
         }
     }
 
+    fun refreshBadges() {
+        items.forEachIndexed { index, item ->
+            val cell = getChildAt(index) as? TextView ?: return@forEachIndexed
+            when (item) {
+                is GridItem.App -> icons.refreshBadge(item.entry, cell)
+                is GridItem.Folder -> icons.refreshBadge(item, cell)
+            }
+        }
+    }
+
     // Страницы не перекрывают ячейки, поэтому при затухании не нужен промежуточный слой.
     override fun hasOverlappingRendering() = false
 

@@ -47,6 +47,14 @@
     <string name="category_navigation">Карты и поездки</string>
     <string name="category_information">Интернет и новости</string>
     <string name="category_tools">Утилиты</string>
+    <string name="settings_badges">Значки уведомлений</string>
+    <string name="badge_off">Нет</string>
+    <string name="badge_dot">Точка</string>
+    <string name="badge_number">Число</string>
+    <string name="settings_badge_access_off">Для значков нужен доступ к уведомлениям. Нажмите, чтобы разрешить</string>
+    <string name="settings_badge_access_on">Доступ к уведомлениям включён</string>
+    <string name="settings_default_off">Для ярлыков приложений Lite Launcher должен быть главным экраном. Нажмите, чтобы выбрать</string>
+    <string name="settings_default_on">Lite Launcher выбран главным экраном</string>
     <string name="settings_hidden">Скрытые приложения</string>
     <string name="settings_hidden_empty">Скрытых приложений нет</string>
     <string name="settings_hidden_hint">Нажмите на приложение, чтобы вернуть его</string>

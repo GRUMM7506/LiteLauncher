@@ -12,7 +12,9 @@ Built for and tested on one low-end phone: Samsung Galaxy A12 (Android 12, 3 GB 
 - **Automatic folders:** apps are sorted into categories such as Social, Productivity and Utilities, like the Windows 11 Start menu. A folder appears once a category has 3 apps. You can turn this off.
 - **Motion:** opening the grid follows your finger and settles on a spring, and you can catch it mid-flight.
 - **Wallpapers drawn in code:** a dark and a light variant that switch with the system theme, plus a light live wallpaper that only draws while visible.
-- **Widgets, hidden apps, pinned apps, search.**
+- **Widgets:** live preview before adding, drag to move, handles to resize.
+- **Notification badges and app shortcuts** in the long-press menu.
+- **Hidden apps, pinned apps, search.**
 
 Long-press an empty spot on the home screen for widgets, wallpaper and settings.
 
@@ -29,6 +31,8 @@ Download the APK from [Releases](https://github.com/GRUMM7506/LiteLauncher/relea
 | `SET_WALLPAPER` | The Lite wallpaper, only if you turn it on |
 
 There is no `INTERNET` permission.
+
+Notification badges need notification access, which you grant in system settings and can turn off at any time. Lite Launcher only counts notifications per app. It does not read, store or send their content.
 
 ## Build
 
@@ -54,7 +58,11 @@ Without a `keystore.properties` file, the release build is signed with your debu
 - **Автоматические папки:** приложения сортируются по категориям, как в меню «Пуск» Windows 11. Папка появляется от 3 приложений, функцию можно выключить.
 - **Движение:** список открывается за пальцем и доводится пружиной, его можно поймать на лету.
 - **Обои, нарисованные кодом:** тёмные и светлые меняются вместе с темой системы, а лёгкие живые обои рисуют только пока видны.
-- **Виджеты, скрытие и закрепление приложений, поиск.**
+- **Виджеты:** живой предпросмотр перед добавлением, перетаскивание, изменение размера ручками.
+- **Значки уведомлений и ярлыки приложений** в меню по долгому нажатию.
+- **Скрытие и закрепление приложений, поиск.**
+
+Значкам нужен доступ к уведомлениям. Лаунчер только считает уведомления по приложениям, их содержимое он не читает, не хранит и не отправляет.
 
 Долгое нажатие на пустое место главного экрана открывает виджеты, обои и настройки.
 

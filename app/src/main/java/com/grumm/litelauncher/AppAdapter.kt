@@ -33,6 +33,9 @@ class AppAdapter(
         notifyDataSetChanged()
     }
 
+    /** Обновляет значки, не перепривязывая страницы целиком. */
+    fun refreshBadges() = notifyItemRangeChanged(0, itemCount, PAYLOAD_BADGES)
+
     override fun getItemCount() = pages.size
 
     override fun getItemId(position: Int) = position.toLong()
@@ -44,5 +47,13 @@ class AppAdapter(
         holder.page.bind(pages[position], columns, rows, showLabels)
     }
 
+    override fun onBindViewHolder(holder: Holder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.isEmpty()) onBindViewHolder(holder, position) else holder.page.refreshBadges()
+    }
+
     class Holder(val page: AppPageView) : RecyclerView.ViewHolder(page)
+
+    private companion object {
+        const val PAYLOAD_BADGES = "badges"
+    }
 }

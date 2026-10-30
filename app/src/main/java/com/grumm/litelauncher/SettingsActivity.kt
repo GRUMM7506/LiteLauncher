@@ -5,9 +5,11 @@ import android.app.AlertDialog
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.LauncherApps
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.TypedValue
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -17,6 +19,8 @@ import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.getSystemService
 import java.util.concurrent.Executors
 
 /** Экран настроек. Отдельная Activity: её классы не грузятся, пока экран не открыт. */
@@ -26,6 +30,8 @@ class SettingsActivity : Activity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var settings: LauncherSettings
     private lateinit var content: LinearLayout
+    private lateinit var accessRow: TextView
+    private lateinit var homeRow: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,6 +45,11 @@ class SettingsActivity : Activity() {
             addView(content)
         })
         addRows()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updatePermissionRows()
     }
 
     override fun onDestroy() {
@@ -59,6 +70,9 @@ class SettingsActivity : Activity() {
         addSwitch(R.string.settings_shade, settings.swipeDownShade) { settings.copy(swipeDownShade = it) }
         addSwitch(R.string.settings_folders, settings.autoFolders) { settings.copy(autoFolders = it) }
         addSwitch(R.string.settings_themed_wallpaper, settings.themedWallpaper) { settings.copy(themedWallpaper = it) }
+        addSlider(R.string.settings_badges, 0..2, settings.badgeStyle, ::badgeName) { settings.copy(badgeStyle = it) }
+        accessRow = addAction(R.string.settings_badge_access_off, ::openNotificationAccess)
+        homeRow = addAction(R.string.settings_default_off, ::openHomeSettings)
         addAction(R.string.settings_live_wallpaper, ::openLiveWallpaper)
         addAction(R.string.menu_wallpaper, ::openWallpaperPicker)
         addAction(R.string.settings_hidden, ::showHiddenApps)
@@ -112,12 +126,31 @@ class SettingsActivity : Activity() {
         })
     }
 
-    private fun addAction(titleRes: Int, action: () -> Unit) {
-        content.addView(newText().apply {
-            setText(titleRes)
-            setOnClickListener { action() }
-        })
+    private fun addAction(titleRes: Int, action: () -> Unit): TextView = newText().apply {
+        setText(titleRes)
+        setOnClickListener { action() }
+        content.addView(this)
     }
+
+    private fun badgeName(style: Int) = getString(
+        when (style) {
+            LauncherSettings.BADGE_OFF -> R.string.badge_off
+            LauncherSettings.BADGE_NUMBER -> R.string.badge_number
+            else -> R.string.badge_dot
+        },
+    )
+
+    /** Разрешения выдаются в системных настройках, поэтому статус обновляем при возврате сюда. */
+    private fun updatePermissionRows() {
+        val listening = packageName in NotificationManagerCompat.getEnabledListenerPackages(this)
+        accessRow.setText(if (listening) R.string.settings_badge_access_on else R.string.settings_badge_access_off)
+        val isHost = getSystemService<LauncherApps>()?.hasShortcutHostPermission() == true
+        homeRow.setText(if (isHost) R.string.settings_default_on else R.string.settings_default_off)
+    }
+
+    private fun openNotificationAccess() = startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+
+    private fun openHomeSettings() = startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
 
     private fun newText() = TextView(this).apply {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_SP)

@@ -5,50 +5,77 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.LauncherApps
+import android.content.pm.ShortcutInfo
 import android.graphics.Rect
+import android.graphics.drawable.Drawable
 import android.net.Uri
+import android.os.Handler
 import android.view.View
-import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.core.content.getSystemService
+import java.util.concurrent.Executor
 
-/** Запуск приложения и контекстное меню. */
+/** Запуск приложения и меню по долгому нажатию. */
 class AppActions(
     private val context: Context,
     private val pins: PinStore,
+    private val executor: Executor,
+    private val mainHandler: Handler,
     private val onPinsChanged: () -> Unit,
     private val onHide: (AppEntry) -> Unit,
 ) {
+    private class ShortcutRow(val info: ShortcutInfo, val icon: Drawable?)
+
     private val launcherApps = context.getSystemService<LauncherApps>()!!
 
     /** Окно приложения вырастает из его иконки. */
     fun launch(entry: AppEntry, source: View) {
-        val bounds = Rect().also(source::getGlobalVisibleRect)
-        val options = ActivityOptions.makeScaleUpAnimation(source, 0, 0, source.width, source.height).toBundle()
-        guarded { launcherApps.startMainActivity(entry.info.componentName, entry.info.user, bounds, options) }
+        guarded { launcherApps.startMainActivity(entry.info.componentName, entry.info.user, boundsOf(source), optionsFor(source)) }
     }
 
-    fun showMenu(entry: AppEntry, anchor: View) {
-        val pinned = pins.isPinned(entry.key)
-        PopupMenu(context, anchor).apply {
-            menu.add(0, ITEM_PIN, 0, if (pinned) R.string.menu_unpin else R.string.menu_pin)
-            menu.add(0, ITEM_DETAILS, 1, R.string.menu_details)
-            menu.add(0, ITEM_HIDE, 2, R.string.menu_hide)
-            menu.add(0, ITEM_UNINSTALL, 3, R.string.menu_uninstall)
-            setOnMenuItemClickListener { onMenuItem(it.itemId, entry) }
-            show()
+    /** Ярлыки читаются через binder и с диска, поэтому меню открывается после их загрузки. */
+    fun showMenu(entry: AppEntry, anchor: View) = executor.execute {
+        val shortcuts = loadShortcuts(entry)
+        mainHandler.post {
+            if (anchor.isAttachedToWindow) ActionPopup.show(anchor, shortcutRows(shortcuts, anchor) + actionRows(entry, shortcuts.isNotEmpty()))
         }
     }
 
-    private fun onMenuItem(itemId: Int, entry: AppEntry): Boolean {
-        when (itemId) {
-            ITEM_PIN -> togglePin(entry)
-            ITEM_DETAILS -> showDetails(entry)
-            ITEM_HIDE -> onHide(entry)
-            ITEM_UNINSTALL -> uninstall(entry)
+    /** Система отдаёт ярлыки только лаунчеру, назначенному по умолчанию. */
+    private fun loadShortcuts(entry: AppEntry): List<ShortcutRow> = runCatching {
+        if (!launcherApps.hasShortcutHostPermission()) return emptyList()
+        val query = LauncherApps.ShortcutQuery()
+            .setPackage(entry.info.componentName.packageName)
+            .setActivity(entry.info.componentName)
+            .setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST)
+        val density = context.resources.displayMetrics.densityDpi
+        launcherApps.getShortcuts(query, entry.info.user).orEmpty()
+            .filter { it.isEnabled }
+            .sortedWith(compareBy({ !it.isDeclaredInManifest }, { it.rank }))
+            .take(MAX_SHORTCUTS)
+            .map { ShortcutRow(it, launcherApps.getShortcutIconDrawable(it, density)) }
+    }.getOrDefault(emptyList())
+
+    private fun shortcutRows(shortcuts: List<ShortcutRow>, anchor: View) = shortcuts.map { shortcut ->
+        ActionPopup.Row(shortcut.info.shortLabel ?: "", shortcut.icon) {
+            guarded { launcherApps.startShortcut(shortcut.info, boundsOf(anchor), optionsFor(anchor)) }
         }
-        return true
     }
+
+    private fun actionRows(entry: AppEntry, afterShortcuts: Boolean): List<ActionPopup.Row> {
+        val pinLabel = if (pins.isPinned(entry.key)) R.string.menu_unpin else R.string.menu_pin
+        return listOf(
+            ActionPopup.Row(context.getString(pinLabel), startsGroup = afterShortcuts) { togglePin(entry) },
+            ActionPopup.Row(context.getString(R.string.menu_details)) { showDetails(entry) },
+            ActionPopup.Row(context.getString(R.string.menu_hide)) { onHide(entry) },
+            ActionPopup.Row(context.getString(R.string.menu_uninstall)) { uninstall(entry) },
+        )
+    }
+
+    private fun boundsOf(source: View) = Rect().also(source::getGlobalVisibleRect)
+
+    private fun optionsFor(source: View) =
+        ActivityOptions.makeScaleUpAnimation(source, 0, 0, source.width, source.height).toBundle()
 
     private fun togglePin(entry: AppEntry) {
         if (!pins.isPinned(entry.key) && pins.isFull) {
@@ -80,6 +107,8 @@ class AppActions(
             showLaunchError()
         } catch (_: SecurityException) {
             showLaunchError()
+        } catch (_: IllegalStateException) {
+            showLaunchError()
         }
     }
 
@@ -87,9 +116,6 @@ class AppActions(
         Toast.makeText(context, R.string.launch_failed, Toast.LENGTH_SHORT).show()
 
     private companion object {
-        const val ITEM_PIN = 1
-        const val ITEM_DETAILS = 2
-        const val ITEM_HIDE = 3
-        const val ITEM_UNINSTALL = 4
+        const val MAX_SHORTCUTS = 4
     }
 }

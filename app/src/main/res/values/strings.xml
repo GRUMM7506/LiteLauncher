@@ -48,6 +48,14 @@
     <string name="category_navigation">Maps &amp; travel</string>
     <string name="category_information">Internet &amp; news</string>
     <string name="category_tools">Utilities</string>
+    <string name="settings_badges">Notification badges</string>
+    <string name="badge_off">Off</string>
+    <string name="badge_dot">Dot</string>
+    <string name="badge_number">Number</string>
+    <string name="settings_badge_access_off">Badges need notification access. Tap to allow</string>
+    <string name="settings_badge_access_on">Notification access is on</string>
+    <string name="settings_default_off">App shortcuts need Lite Launcher as your home app. Tap to choose</string>
+    <string name="settings_default_on">Lite Launcher is your home app</string>
     <string name="settings_hidden">Hidden apps</string>
     <string name="settings_hidden_empty">No hidden apps</string>
     <string name="settings_hidden_hint">Tap an app to show it again</string>

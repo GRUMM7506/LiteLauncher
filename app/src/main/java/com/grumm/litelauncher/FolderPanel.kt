@@ -68,6 +68,8 @@ class FolderPanel(
         spring.snapTo(0f)
     }
 
+    fun refreshBadges() = adapter.refreshBadges()
+
     private fun onClick(item: GridItem, source: View) {
         if (item is GridItem.App) onLaunch(item.entry, source)
     }

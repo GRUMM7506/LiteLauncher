@@ -17,6 +17,7 @@ data class LauncherSettings(
     val swipeDownShade: Boolean = true,
     val autoFolders: Boolean = true,
     val themedWallpaper: Boolean = false,
+    val badgeStyle: Int = BADGE_DOT,
     val hidden: Set<String> = emptySet(),
 ) {
     val springOmega get() = when (motion) {
@@ -39,6 +40,7 @@ data class LauncherSettings(
             putBoolean(KEY_SHADE, swipeDownShade)
             putBoolean(KEY_FOLDERS, autoFolders)
             putBoolean(KEY_THEMED_WALLPAPER, themedWallpaper)
+            putInt(KEY_BADGES, badgeStyle)
             putStringSet(KEY_HIDDEN, hidden)
         }
     }
@@ -47,6 +49,9 @@ data class LauncherSettings(
         const val MOTION_RELAXED = 0
         const val MOTION_NORMAL = 1
         const val MOTION_FAST = 2
+        const val BADGE_OFF = 0
+        const val BADGE_DOT = 1
+        const val BADGE_NUMBER = 2
 
         private const val PREFS_NAME = "settings"
         private const val KEY_COLUMNS = "columns"
@@ -61,6 +66,7 @@ data class LauncherSettings(
         private const val KEY_SHADE = "swipe_down_shade"
         private const val KEY_FOLDERS = "auto_folders"
         private const val KEY_THEMED_WALLPAPER = "themed_wallpaper"
+        private const val KEY_BADGES = "badge_style"
         private const val KEY_HIDDEN = "hidden"
 
         fun load(context: Context): LauncherSettings {
@@ -79,6 +85,7 @@ data class LauncherSettings(
                 swipeDownShade = prefs.getBoolean(KEY_SHADE, defaults.swipeDownShade),
                 autoFolders = prefs.getBoolean(KEY_FOLDERS, defaults.autoFolders),
                 themedWallpaper = prefs.getBoolean(KEY_THEMED_WALLPAPER, defaults.themedWallpaper),
+                badgeStyle = prefs.getInt(KEY_BADGES, defaults.badgeStyle),
                 hidden = prefs.getStringSet(KEY_HIDDEN, null).orEmpty().toSet(),
             )
         }
