@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">Lite Launcher</string>
+    <string name="search_hint">Поиск приложений</string>
+    <string name="home_hint">Свайп вверх — все приложения</string>
+    <string name="menu_pin">Закрепить</string>
+    <string name="menu_unpin">Открепить</string>
+    <string name="menu_details">О приложении</string>
+    <string name="menu_uninstall">Удалить</string>
+    <string name="pin_limit">Можно закрепить не более %d приложений</string>
+    <string name="launch_failed">Не удалось открыть приложение</string>
 </resources>
