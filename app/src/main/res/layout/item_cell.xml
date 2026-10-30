@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    style="@style/WallpaperText"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:drawablePadding="6dp"
+    android:ellipsize="end"
+    android:gravity="top|center_horizontal"
+    android:maxLines="1"
+    android:paddingHorizontal="4dp"
+    android:stateListAnimator="@animator/press_scale"
+    android:textSize="12sp" />

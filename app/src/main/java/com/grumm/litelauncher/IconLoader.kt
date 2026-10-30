@@ -1,9 +1,12 @@
 package com.grumm.litelauncher
 
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.ColorDrawable
+import android.graphics.Canvas
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.util.LruCache
@@ -17,23 +20,28 @@ class IconLoader(
     private val executor: Executor,
     private val mainHandler: Handler,
 ) {
-    private val sizePx = (ICON_SIZE_DP * context.resources.displayMetrics.density).toInt()
-    private val placeholder = ColorDrawable(0).apply { setBounds(0, 0, sizePx, sizePx) }
+    @Volatile
+    private var sizePx = 0
 
     private val cache = object : LruCache<String, Bitmap>(CACHE_BYTES) {
         override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
     }
 
-    /** Ставит иконку в [target]. View может быть переиспользована, актуальность проверяется по тегу. */
-    fun bind(entry: AppEntry, target: TextView, onTop: Boolean) {
-        target.tag = entry.key
-        val cached = cache.get(entry.key)
-        if (cached != null) {
-            target.setIcon(cached.toDrawable(), onTop)
-            return
+    fun setIconSize(sizeDp: Int) {
+        val updated = (sizeDp * context.resources.displayMetrics.density).toInt()
+        if (updated != sizePx) {
+            sizePx = updated
+            cache.evictAll()
         }
-        target.setIcon(placeholder, onTop)
-        executor.execute { loadAndDeliver(entry, target, onTop) }
+    }
+
+    /** Ставит иконку над подписью. View может быть переиспользована, актуальность проверяется по тегу. */
+    fun bind(entry: AppEntry, target: TextView) {
+        target.tag = entry.key
+        val slot = slotOf(target)
+        val cached = cache.get(entry.key)
+        slot.show(cached)
+        if (cached == null) executor.execute { loadAndDeliver(entry, target, slot) }
     }
 
     fun remove(key: String) {
@@ -42,11 +50,17 @@ class IconLoader(
 
     fun clear() = cache.evictAll()
 
-    private fun loadAndDeliver(entry: AppEntry, target: TextView, onTop: Boolean) {
+    private fun slotOf(target: TextView): IconSlot {
+        val current = target.compoundDrawablesRelative[1] as? IconSlot
+        if (current != null && current.size == sizePx) return current
+        return IconSlot(sizePx).also { target.setCompoundDrawablesRelative(null, it, null, null) }
+    }
+
+    private fun loadAndDeliver(entry: AppEntry, target: TextView, slot: IconSlot) {
         if (target.tag != entry.key) return
         val bitmap = cache.get(entry.key) ?: render(entry)?.also { cache.put(entry.key, it) } ?: return
         mainHandler.post {
-            if (target.tag == entry.key) target.setIcon(bitmap.toDrawable(), onTop)
+            if (target.tag == entry.key) slot.fadeIn(bitmap)
         }
     }
 
@@ -56,16 +70,54 @@ class IconLoader(
         entry.info.getBadgedIcon(density).toBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     }.getOrNull()
 
-    private fun Bitmap.toDrawable(): Drawable =
-        BitmapDrawable(context.resources, this).apply { setBounds(0, 0, sizePx, sizePx) }
+    /** Постоянное место под иконку: смена картинки не вызывает пересчёт разметки сетки. */
+    private class IconSlot(val size: Int) : Drawable() {
+        private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+        private var bitmap: Bitmap? = null
+        private var fade: ValueAnimator? = null
 
-    private fun TextView.setIcon(icon: Drawable, onTop: Boolean) {
-        if (onTop) setCompoundDrawablesRelative(null, icon, null, null)
-        else setCompoundDrawablesRelative(icon, null, null, null)
+        init {
+            setBounds(0, 0, size, size)
+        }
+
+        fun show(icon: Bitmap?) {
+            fade?.cancel()
+            paint.alpha = 255
+            bitmap = icon
+            invalidateSelf()
+        }
+
+        fun fadeIn(icon: Bitmap) {
+            show(icon)
+            paint.alpha = 0
+            fade = ValueAnimator.ofInt(0, 255).apply {
+                duration = FADE_MS
+                addUpdateListener {
+                    paint.alpha = it.animatedValue as Int
+                    invalidateSelf()
+                }
+                start()
+            }
+        }
+
+        override fun draw(canvas: Canvas) {
+            bitmap?.let { canvas.drawBitmap(it, null, bounds, paint) }
+        }
+
+        override fun setAlpha(alpha: Int) = Unit
+
+        override fun setColorFilter(colorFilter: ColorFilter?) = Unit
+
+        @Suppress("OVERRIDE_DEPRECATION")
+        override fun getOpacity() = PixelFormat.TRANSLUCENT
+
+        override fun getIntrinsicWidth() = size
+
+        override fun getIntrinsicHeight() = size
     }
 
     private companion object {
-        const val ICON_SIZE_DP = 48
         const val CACHE_BYTES = 4 * 1024 * 1024
+        const val FADE_MS = 140L
     }
 }

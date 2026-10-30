@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.grumm.litelauncher.SwipeUpLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.grumm.litelauncher.GestureRootLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -8,6 +8,8 @@
         android:id="@+id/home"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:alpha="0"
+        android:forceHasOverlappingRendering="false"
         android:orientation="vertical"
         android:paddingHorizontal="8dp"
         android:paddingTop="56dp"
@@ -18,6 +20,7 @@
             style="@style/WallpaperText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-light"
             android:gravity="center"
             android:includeFontPadding="false"
             android:textSize="72sp" />
@@ -32,28 +35,41 @@
             android:textSize="18sp" />
 
         <LinearLayout
-            android:id="@+id/pinned"
+            android:id="@+id/widgets"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:gravity="center_horizontal"
-            android:orientation="horizontal" />
+            android:layout_height="0dp"
+            android:layout_marginTop="24dp"
+            android:layout_weight="1"
+            android:orientation="vertical" />
 
         <TextView
             android:id="@+id/hint"
             style="@style/WallpaperText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
+            android:layout_marginBottom="16dp"
             android:gravity="center"
             android:text="@string/home_hint"
             android:textSize="14sp"
             android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/pinned"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
+            android:orientation="horizontal" />
     </LinearLayout>
+
+    <View
+        android:id="@+id/menu_anchor"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:visibility="invisible" />
 
     <ViewStub
         android:id="@+id/drawer_stub"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout="@layout/view_drawer" />
-</com.grumm.litelauncher.SwipeUpLayout>
+</com.grumm.litelauncher.GestureRootLayout>

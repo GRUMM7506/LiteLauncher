@@ -5,6 +5,9 @@
     <!-- Без него системный установщик отклоняет ACTION_DELETE -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
+    <!-- Жест «свайп вниз» открывает шторку уведомлений -->
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -12,12 +15,9 @@
         </intent>
     </queries>
 
-    <!-- Программный рендеринг: PSS 19 МБ против 32 МБ с GPU на A12, прокрутка так же держит 60 fps -->
-
     <application
         android:allowBackup="false"
         android:enableOnBackInvokedCallback="false"
-        android:hardwareAccelerated="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
@@ -42,6 +42,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".SettingsActivity"
+            android:autoRemoveFromRecents="true"
+            android:exported="false"
+            android:label="@string/menu_settings"
+            android:taskAffinity=".settings"
+            android:theme="@android:style/Theme.DeviceDefault.DayNight" />
     </application>
 
 </manifest>

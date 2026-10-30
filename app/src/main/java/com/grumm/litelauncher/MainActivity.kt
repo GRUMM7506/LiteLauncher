@@ -10,11 +10,15 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.format.DateFormat
+import android.util.TypedValue
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewStub
 import android.view.WindowInsets
+import android.view.animation.PathInterpolator
 import android.widget.LinearLayout
+import android.widget.PopupMenu
 import android.widget.TextView
 import androidx.core.view.WindowCompat
 import androidx.core.view.isVisible
@@ -22,23 +26,30 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
 
-class MainActivity : Activity() {
+class MainActivity : Activity(), GestureRootLayout.Listener {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val executor = Executors.newSingleThreadExecutor()
+    private val easeOut = PathInterpolator(0.2f, 0f, 0f, 1f)
+
     private lateinit var icons: IconLoader
     private lateinit var pins: PinStore
     private lateinit var actions: AppActions
     private lateinit var repository: AppRepository
+    private lateinit var widgets: WidgetPanel
 
-    private lateinit var root: SwipeUpLayout
+    private lateinit var root: GestureRootLayout
     private lateinit var home: View
     private lateinit var clock: TextView
     private lateinit var date: TextView
     private lateinit var pinnedRow: LinearLayout
     private lateinit var hint: View
+    private lateinit var menuAnchor: View
 
+    private var settings = LauncherSettings()
+    private var loaded = false
     private var drawer: AppDrawer? = null
+    private var transition: DrawerTransition? = null
     private var pinnedEntries = emptyList<AppEntry>()
     private var apps = emptyList<AppEntry>()
 
@@ -46,17 +57,18 @@ class MainActivity : Activity() {
         override fun onReceive(context: Context, intent: Intent) = updateClock()
     }
 
+    override val isDrawerOpen get() = transition?.isOpen == true
+    override val swipeDownEnabled get() = settings.swipeDownShade
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
-        createComponents()
         bindViews()
+        createComponents()
         applyWindowInsets()
-        root.onOpenRequest = ::openDrawer
         repository.start()
         loadInBackground()
-        prepareDrawerWhenIdle()
     }
 
     override fun onStart() {
@@ -67,11 +79,14 @@ class MainActivity : Activity() {
             addAction(Intent.ACTION_TIME_CHANGED)
             addAction(Intent.ACTION_TIMEZONE_CHANGED)
         })
+        if (loaded) onReturned()
     }
 
     override fun onStop() {
         unregisterReceiver(timeReceiver)
-        drawer?.close()
+        drawer?.onClosing()
+        transition?.snapClosed()
+        if (loaded) widgets.stop()
         super.onStop()
     }
 
@@ -84,28 +99,50 @@ class MainActivity : Activity() {
     /** Нажатие «Домой», пока лаунчер уже на экране. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        drawer?.close()
+        closeDrawer()
     }
 
     @Deprecated("Система вызывает его, пока в манифесте enableOnBackInvokedCallback=false")
-    override fun onBackPressed() {
-        drawer?.close()
+    override fun onBackPressed() = closeDrawer()
+
+    @Deprecated("Activity без AndroidX получает результат только так")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        widgets.onActivityResult(requestCode, resultCode)
     }
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
-            icons.clear()
-            drawer?.releaseViews()
-        }
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) icons.clear()
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) drawer?.releaseViews()
     }
 
-    private fun createComponents() {
-        icons = IconLoader(this, executor, mainHandler)
-        pins = PinStore(this)
-        actions = AppActions(this, pins, ::renderPinned)
-        repository = AppRepository(this, executor, mainHandler, ::onAppsChanged)
+    override fun catchMotion(): Boolean {
+        val running = transition?.takeIf { it.isAnimating } ?: return false
+        running.beginDrag()
+        return true
     }
+
+    override fun isDragBlocked(x: Float, y: Float) = widgets.contains(x, y)
+
+    override fun onDragStart() {
+        val current = obtainDrawer()
+        if (isDrawerOpen) current.onClosing()
+        transition?.beginDrag()
+    }
+
+    override fun onDragBy(deltaY: Float) {
+        transition?.dragBy(deltaY)
+    }
+
+    override fun onDragEnd(velocityY: Float) {
+        transition?.release(velocityY)
+    }
+
+    override fun onSwipeDown() = expandNotificationShade()
+
+    override fun onTap() = openDrawer()
+
+    override fun onLongPress(x: Float, y: Float) = showHomeMenu(x, y)
 
     private fun bindViews() {
         root = findViewById(R.id.root)
@@ -114,6 +151,15 @@ class MainActivity : Activity() {
         date = findViewById(R.id.date)
         pinnedRow = findViewById(R.id.pinned)
         hint = findViewById(R.id.hint)
+        menuAnchor = findViewById(R.id.menu_anchor)
+    }
+
+    private fun createComponents() {
+        icons = IconLoader(this, executor, mainHandler)
+        pins = PinStore(this)
+        actions = AppActions(this, pins, ::renderPinned, ::hideApp)
+        repository = AppRepository(this, executor, mainHandler, ::onAppsChanged)
+        widgets = WidgetPanel(this, findViewById(R.id.widgets), executor, mainHandler)
     }
 
     private fun applyWindowInsets() {
@@ -133,16 +179,58 @@ class MainActivity : Activity() {
 
     /** Закреплённые показываем сразу, не дожидаясь чтения меток всех приложений. */
     private fun loadInBackground() = executor.execute {
+        val savedSettings = LauncherSettings.load(this)
+        val savedWidgets = WidgetPanel.loadSaved(this)
         val keys = pins.load()
         val resolved = keys.mapNotNull(repository::resolve)
-        mainHandler.post { onPinsLoaded(keys, resolved) }
+        mainHandler.post { onLoaded(savedSettings, savedWidgets, keys, resolved) }
         repository.loadAll()
     }
 
-    private fun onPinsLoaded(keys: List<String>, resolved: List<AppEntry>) {
+    private fun onLoaded(
+        savedSettings: LauncherSettings,
+        savedWidgets: List<Pair<Int, Int>>,
+        keys: List<String>,
+        resolved: List<AppEntry>,
+    ) {
+        loaded = true
+        applySettings(savedSettings)
+        widgets.restore(savedWidgets)
         pins.setLoaded(keys)
         pinnedEntries = resolved
         showPinned(resolved)
+        root.listener = this
+        revealHome()
+        prepareDrawerWhenIdle()
+    }
+
+    /** Возврат на экран: подхватываем настройки и мягко показываем главный экран. */
+    private fun onReturned() {
+        val current = LauncherSettings.load(this)
+        if (current != settings) {
+            applySettings(current)
+            renderPinned()
+            publishAppsToDrawer()
+        }
+        widgets.start()
+        drawer?.restoreViews()
+        revealHome()
+    }
+
+    private fun revealHome() {
+        home.alpha = 0f
+        home.scaleX = REVEAL_SCALE
+        home.scaleY = REVEAL_SCALE
+        home.animate().alpha(1f).scaleX(1f).scaleY(1f)
+            .setInterpolator(easeOut).setDuration(REVEAL_MS).start()
+    }
+
+    private fun applySettings(updated: LauncherSettings) {
+        settings = updated
+        icons.setIconSize(updated.iconSizeDp)
+        clock.setTextSize(TypedValue.COMPLEX_UNIT_SP, updated.clockSizeSp.toFloat())
+        transition?.applySettings(updated)
+        drawer?.applySettings(updated)
     }
 
     private fun onAppsChanged(updated: List<AppEntry>, stale: List<AppEntry>, uninstalled: Boolean) {
@@ -150,7 +238,19 @@ class MainActivity : Activity() {
         stale.forEach { icons.remove(it.key) }
         if (uninstalled) pins.removeAll(stale.map { it.key })
         renderPinned()
-        drawer?.setApps(updated)
+        publishAppsToDrawer()
+    }
+
+    private fun publishAppsToDrawer() {
+        drawer?.setApps(visibleApps())
+    }
+
+    private fun visibleApps() = apps.filter { it.key !in settings.hidden }
+
+    private fun hideApp(entry: AppEntry) {
+        applySettings(settings.copy(hidden = settings.hidden + entry.key))
+        settings.store(this)
+        publishAppsToDrawer()
     }
 
     private fun renderPinned() {
@@ -171,8 +271,8 @@ class MainActivity : Activity() {
         LayoutInflater.from(this).inflate(R.layout.item_pinned, pinnedRow, false)
 
     private fun bindPinned(view: TextView, entry: AppEntry) {
-        view.text = entry.label
-        icons.bind(entry, view, onTop = true)
+        view.text = if (settings.showLabels) entry.label else ""
+        icons.bind(entry, view)
         view.setOnClickListener { actions.launch(entry, it) }
         view.setOnLongClickListener {
             actions.showMenu(entry, it)
@@ -180,7 +280,7 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Создаём список заранее, чтобы первое открытие не тратило время на загрузку классов. */
+    /** Создаём сетку заранее, чтобы первый же жест шёл без подгрузки классов и разметки. */
     private fun prepareDrawerWhenIdle() {
         Looper.myQueue().addIdleHandler {
             obtainDrawer()
@@ -192,17 +292,68 @@ class MainActivity : Activity() {
 
     private fun createDrawer(): AppDrawer {
         val view = findViewById<ViewStub>(R.id.drawer_stub).inflate()
-        return AppDrawer(view, root, home, icons, actions::launch, actions::showMenu) {
-            root.gesturesEnabled = true
-        }.apply { setApps(apps) }
+        val created = AppDrawer(view, icons, actions::launch, actions::showMenu, ::closeDrawer)
+        created.applySettings(settings)
+        created.setApps(visibleApps())
+        transition = DrawerTransition(root, home, view, ::onTransitionSettled).apply { applySettings(settings) }
+        return created
+    }
+
+    private fun onTransitionSettled(open: Boolean) {
+        if (open) drawer?.onOpened() else drawer?.onClosed()
     }
 
     private fun openDrawer() {
-        root.gesturesEnabled = false
-        obtainDrawer().open()
+        obtainDrawer()
+        transition?.settle(open = true)
+    }
+
+    private fun closeDrawer() {
+        if (!isDrawerOpen) return
+        drawer?.onClosing()
+        transition?.settle(open = false)
+    }
+
+    private fun showHomeMenu(x: Float, y: Float) {
+        menuAnchor.x = x
+        menuAnchor.y = y
+        menuAnchor.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        PopupMenu(this, menuAnchor).apply {
+            menu.add(0, ITEM_WIDGET, 0, R.string.menu_add_widget)
+            menu.add(0, ITEM_WALLPAPER, 1, R.string.menu_wallpaper)
+            menu.add(0, ITEM_SETTINGS, 2, R.string.menu_settings)
+            setOnMenuItemClickListener { onHomeMenuItem(it.itemId) }
+            show()
+        }
+    }
+
+    private fun onHomeMenuItem(itemId: Int): Boolean {
+        when (itemId) {
+            ITEM_WIDGET -> widgets.showPicker()
+            ITEM_WALLPAPER -> startActivity(
+                Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), getString(R.string.menu_wallpaper)),
+            )
+            ITEM_SETTINGS -> startActivity(
+                Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
+        return true
+    }
+
+    /** Публичного API нет; если система откажет, жест просто ничего не делает. */
+    private fun expandNotificationShade() {
+        runCatching {
+            val service = getSystemService("statusbar")
+            Class.forName("android.app.StatusBarManager").getMethod("expandNotificationsPanel").invoke(service)
+        }
     }
 
     private companion object {
         const val DATE_SKELETON = "EEEEdMMMM"
+        const val REVEAL_SCALE = 0.96f
+        const val REVEAL_MS = 260L
+        const val ITEM_WIDGET = 1
+        const val ITEM_WALLPAPER = 2
+        const val ITEM_SETTINGS = 3
     }
 }

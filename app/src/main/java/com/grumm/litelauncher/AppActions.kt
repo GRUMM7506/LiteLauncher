@@ -1,5 +1,6 @@
 package com.grumm.litelauncher
 
+import android.app.ActivityOptions
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -16,12 +17,15 @@ class AppActions(
     private val context: Context,
     private val pins: PinStore,
     private val onPinsChanged: () -> Unit,
+    private val onHide: (AppEntry) -> Unit,
 ) {
     private val launcherApps = context.getSystemService<LauncherApps>()!!
 
+    /** Окно приложения вырастает из его иконки. */
     fun launch(entry: AppEntry, source: View) {
         val bounds = Rect().also(source::getGlobalVisibleRect)
-        guarded { launcherApps.startMainActivity(entry.info.componentName, entry.info.user, bounds, null) }
+        val options = ActivityOptions.makeScaleUpAnimation(source, 0, 0, source.width, source.height).toBundle()
+        guarded { launcherApps.startMainActivity(entry.info.componentName, entry.info.user, bounds, options) }
     }
 
     fun showMenu(entry: AppEntry, anchor: View) {
@@ -29,7 +33,8 @@ class AppActions(
         PopupMenu(context, anchor).apply {
             menu.add(0, ITEM_PIN, 0, if (pinned) R.string.menu_unpin else R.string.menu_pin)
             menu.add(0, ITEM_DETAILS, 1, R.string.menu_details)
-            menu.add(0, ITEM_UNINSTALL, 2, R.string.menu_uninstall)
+            menu.add(0, ITEM_HIDE, 2, R.string.menu_hide)
+            menu.add(0, ITEM_UNINSTALL, 3, R.string.menu_uninstall)
             setOnMenuItemClickListener { onMenuItem(it.itemId, entry) }
             show()
         }
@@ -39,6 +44,7 @@ class AppActions(
         when (itemId) {
             ITEM_PIN -> togglePin(entry)
             ITEM_DETAILS -> showDetails(entry)
+            ITEM_HIDE -> onHide(entry)
             ITEM_UNINSTALL -> uninstall(entry)
         }
         return true
@@ -83,6 +89,7 @@ class AppActions(
     private companion object {
         const val ITEM_PIN = 1
         const val ITEM_DETAILS = 2
-        const val ITEM_UNINSTALL = 3
+        const val ITEM_HIDE = 3
+        const val ITEM_UNINSTALL = 4
     }
 }
