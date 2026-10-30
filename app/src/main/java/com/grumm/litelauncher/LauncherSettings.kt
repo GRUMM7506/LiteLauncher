@@ -15,6 +15,8 @@ data class LauncherSettings(
     val haptics: Boolean = true,
     val autoKeyboard: Boolean = false,
     val swipeDownShade: Boolean = true,
+    val autoFolders: Boolean = true,
+    val themedWallpaper: Boolean = false,
     val hidden: Set<String> = emptySet(),
 ) {
     val springOmega get() = when (motion) {
@@ -35,6 +37,8 @@ data class LauncherSettings(
             putBoolean(KEY_HAPTICS, haptics)
             putBoolean(KEY_KEYBOARD, autoKeyboard)
             putBoolean(KEY_SHADE, swipeDownShade)
+            putBoolean(KEY_FOLDERS, autoFolders)
+            putBoolean(KEY_THEMED_WALLPAPER, themedWallpaper)
             putStringSet(KEY_HIDDEN, hidden)
         }
     }
@@ -55,6 +59,8 @@ data class LauncherSettings(
         private const val KEY_HAPTICS = "haptics"
         private const val KEY_KEYBOARD = "auto_keyboard"
         private const val KEY_SHADE = "swipe_down_shade"
+        private const val KEY_FOLDERS = "auto_folders"
+        private const val KEY_THEMED_WALLPAPER = "themed_wallpaper"
         private const val KEY_HIDDEN = "hidden"
 
         fun load(context: Context): LauncherSettings {
@@ -71,6 +77,8 @@ data class LauncherSettings(
                 haptics = prefs.getBoolean(KEY_HAPTICS, defaults.haptics),
                 autoKeyboard = prefs.getBoolean(KEY_KEYBOARD, defaults.autoKeyboard),
                 swipeDownShade = prefs.getBoolean(KEY_SHADE, defaults.swipeDownShade),
+                autoFolders = prefs.getBoolean(KEY_FOLDERS, defaults.autoFolders),
+                themedWallpaper = prefs.getBoolean(KEY_THEMED_WALLPAPER, defaults.themedWallpaper),
                 hidden = prefs.getStringSet(KEY_HIDDEN, null).orEmpty().toSet(),
             )
         }

@@ -2,6 +2,8 @@ package com.grumm.litelauncher
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.WallpaperManager
+import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
@@ -55,6 +57,9 @@ class SettingsActivity : Activity() {
         addSwitch(R.string.settings_haptics, settings.haptics) { settings.copy(haptics = it) }
         addSwitch(R.string.settings_keyboard, settings.autoKeyboard) { settings.copy(autoKeyboard = it) }
         addSwitch(R.string.settings_shade, settings.swipeDownShade) { settings.copy(swipeDownShade = it) }
+        addSwitch(R.string.settings_folders, settings.autoFolders) { settings.copy(autoFolders = it) }
+        addSwitch(R.string.settings_themed_wallpaper, settings.themedWallpaper) { settings.copy(themedWallpaper = it) }
+        addAction(R.string.settings_live_wallpaper, ::openLiveWallpaper)
         addAction(R.string.menu_wallpaper, ::openWallpaperPicker)
         addAction(R.string.settings_hidden, ::showHiddenApps)
     }
@@ -122,6 +127,15 @@ class SettingsActivity : Activity() {
     private fun save(updated: LauncherSettings) {
         settings = updated
         updated.store(this)
+    }
+
+    /** Живые обои система разрешает ставить только после подтверждения пользователем. */
+    private fun openLiveWallpaper() {
+        val component = ComponentName(this, LiteWallpaperService::class.java)
+        startActivity(
+            Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
+                .putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, component),
+        )
     }
 
     private fun openWallpaperPicker() {

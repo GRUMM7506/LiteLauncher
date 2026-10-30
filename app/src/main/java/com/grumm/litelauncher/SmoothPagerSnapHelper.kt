@@ -1,12 +1,23 @@
 package com.grumm.litelauncher
 
+import android.content.Context
 import android.util.DisplayMetrics
 import android.view.View
 import android.view.animation.PathInterpolator
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.PagerSnapHelper
 import androidx.recyclerview.widget.RecyclerView
 import kotlin.math.abs
+
+/** Держит соседние страницы готовыми, чтобы листание не тратило кадр на их разметку. */
+class PagerLayoutManager(context: Context) : LinearLayoutManager(context, HORIZONTAL, false) {
+
+    override fun calculateExtraLayoutSpace(state: RecyclerView.State, extraLayoutSpace: IntArray) {
+        extraLayoutSpace[0] = width
+        extraLayoutSpace[1] = width
+    }
+}
 
 /** Докрутка до страницы с мягким торможением: чем меньше осталось, тем короче движение. */
 class SmoothPagerSnapHelper : PagerSnapHelper() {

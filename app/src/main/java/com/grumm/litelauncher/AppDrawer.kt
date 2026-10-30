@@ -11,8 +11,8 @@ import android.view.WindowInsetsAnimation
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import androidx.core.content.getSystemService
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import java.text.Collator
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -21,14 +21,15 @@ class AppDrawer(
     val view: View,
     icons: IconLoader,
     private val onLaunch: (AppEntry, View) -> Unit,
-    onMenu: (AppEntry, View) -> Unit,
+    private val onMenu: (AppEntry, View) -> Unit,
+    private val onOpenFolder: (GridItem.Folder) -> Unit,
     private val onBack: () -> Unit,
 ) {
     private val search = view.findViewById<SearchField>(R.id.search)
     private val list = view.findViewById<RecyclerView>(R.id.list)
     private val dots = view.findViewById<PageDots>(R.id.dots)
     private val bottomBar = view.findViewById<View>(R.id.bottom_bar)
-    private val adapter = AppAdapter(icons, onLaunch, onMenu)
+    private val adapter = AppAdapter(icons, ::onItemClick, ::onItemLongClick)
     private val imm = view.context.getSystemService<InputMethodManager>()!!
     private val density = view.resources.displayMetrics.density
     private var settings = LauncherSettings()
@@ -115,15 +116,39 @@ class AppDrawer(
 
     private fun applyFilter() {
         val query = search.text.toString().trim()
-        val shown = if (query.isEmpty()) apps else apps.filter { it.label.contains(query, ignoreCase = true) }
+        val shown = when {
+            query.isNotEmpty() -> apps.filter { it.label.contains(query, ignoreCase = true) }.map { GridItem.App(it) }
+            settings.autoFolders -> groupIntoFolders()
+            else -> apps.map { GridItem.App(it) }
+        }
         adapter.submit(shown, settings.columns, visibleRows, settings.showLabels)
         dots.setCount(adapter.itemCount)
+    }
+
+    /** Как в меню «Пуск» Windows 11: сначала папки по категориям, затем всё, что в папку не набралось. */
+    private fun groupIntoFolders(): List<GridItem> {
+        val (grouped, single) = apps.groupBy { it.category }.entries
+            .partition { (category, members) -> category != AppCategory.OTHER && members.size >= MIN_FOLDER_APPS }
+        val folders = grouped.map { (category, members) ->
+            GridItem.Folder(view.context.getString(category.labelRes), members)
+        }.sortedBy { it.label }
+        val loose = single.flatMap { it.value }.sortedWith(compareBy(Collator.getInstance()) { it.label })
+        return folders + loose.map { GridItem.App(it) }
+    }
+
+    private fun onItemClick(item: GridItem, source: View) = when (item) {
+        is GridItem.App -> onLaunch(item.entry, source)
+        is GridItem.Folder -> onOpenFolder(item)
+    }
+
+    private fun onItemLongClick(item: GridItem, source: View) {
+        if (item is GridItem.App) onMenu(item.entry, source)
     }
 
     private fun launchFirstMatch(actionId: Int, event: KeyEvent?): Boolean {
         val isEnter = event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN
         if (actionId != EditorInfo.IME_ACTION_GO && !isEnter) return false
-        adapter.first?.let { onLaunch(it, search) }
+        (adapter.first as? GridItem.App)?.let { onLaunch(it.entry, search) }
         return true
     }
 
@@ -212,17 +237,8 @@ class AppDrawer(
         return location[1] - bottomBar.translationY.toInt()
     }
 
-    /** Держит соседние страницы готовыми, чтобы листание не тратило кадр на их разметку. */
-    private class PagerLayoutManager(context: Context) :
-        LinearLayoutManager(context, HORIZONTAL, false) {
-
-        override fun calculateExtraLayoutSpace(state: RecyclerView.State, extraLayoutSpace: IntArray) {
-            extraLayoutSpace[0] = width
-            extraLayoutSpace[1] = width
-        }
-    }
-
     private companion object {
+        const val MIN_FOLDER_APPS = 3
         const val LABEL_SPACE_DP = 30
         const val PAGE_FADE = 0.4f
         const val PAGE_SHRINK = 0.05f

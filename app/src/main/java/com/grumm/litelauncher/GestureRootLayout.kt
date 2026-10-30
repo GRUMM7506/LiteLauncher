@@ -17,6 +17,7 @@ class GestureRootLayout(context: Context, attrs: AttributeSet?) : FrameLayout(co
     interface Listener {
         val isDrawerOpen: Boolean
         val swipeDownEnabled: Boolean
+        val isFolderOpen: Boolean
 
         /** Если переход ещё идёт — останавливает его и возвращает true: новый жест подхватит его. */
         fun catchMotion(): Boolean
@@ -44,6 +45,7 @@ class GestureRootLayout(context: Context, attrs: AttributeSet?) : FrameLayout(co
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
         val listener = listener ?: return false
+        if (listener.isFolderOpen) return false
         trackVelocity(ev)
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {

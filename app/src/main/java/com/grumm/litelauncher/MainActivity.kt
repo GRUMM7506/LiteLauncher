@@ -6,6 +6,8 @@ import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.Configuration
+import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -16,6 +18,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewStub
 import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.animation.PathInterpolator
 import android.widget.LinearLayout
 import android.widget.PopupMenu
@@ -37,6 +40,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
     private lateinit var actions: AppActions
     private lateinit var repository: AppRepository
     private lateinit var widgets: WidgetPanel
+    private lateinit var contrast: WallpaperContrast
 
     private lateinit var root: GestureRootLayout
     private lateinit var home: View
@@ -50,6 +54,8 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
     private var loaded = false
     private var drawer: AppDrawer? = null
     private var transition: DrawerTransition? = null
+    private var folderPanel: FolderPanel? = null
+    private var darkText = false
     private var pinnedEntries = emptyList<AppEntry>()
     private var apps = emptyList<AppEntry>()
 
@@ -59,6 +65,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
 
     override val isDrawerOpen get() = transition?.isOpen == true
     override val swipeDownEnabled get() = settings.swipeDownShade
+    override val isFolderOpen get() = folderPanel?.isOpen == true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,7 +75,14 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
         createComponents()
         applyWindowInsets()
         repository.start()
+        contrast.start()
         loadInBackground()
+    }
+
+    /** Смена темы приходит сюда: uiMode объявлен в configChanges манифеста. */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (loaded) syncThemedWallpaper()
     }
 
     override fun onStart() {
@@ -84,6 +98,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
 
     override fun onStop() {
         unregisterReceiver(timeReceiver)
+        folderPanel?.closeNow()
         drawer?.onClosing()
         transition?.snapClosed()
         if (loaded) widgets.stop()
@@ -91,6 +106,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
     }
 
     override fun onDestroy() {
+        contrast.stop()
         repository.stop()
         executor.shutdown()
         super.onDestroy()
@@ -99,6 +115,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
     /** Нажатие «Домой», пока лаунчер уже на экране. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        folderPanel?.closeNow()
         closeDrawer()
     }
 
@@ -160,6 +177,38 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
         actions = AppActions(this, pins, ::renderPinned, ::hideApp)
         repository = AppRepository(this, executor, mainHandler, ::onAppsChanged)
         widgets = WidgetPanel(this, findViewById(R.id.widgets), executor, mainHandler)
+        contrast = WallpaperContrast(this, executor, mainHandler, ::onContrastChanged)
+    }
+
+    /** Тёмный текст и значки строки состояния нужны только на светлых обоях и без подложки списка. */
+    private fun onContrastChanged(dark: Boolean) {
+        darkText = dark
+        val views = listOf(clock, date, hint as TextView) +
+            (0 until pinnedRow.childCount).map { pinnedRow.getChildAt(it) as TextView }
+        views.forEach(::styleForWallpaper)
+        updateSystemBars()
+    }
+
+    private fun styleForWallpaper(view: TextView) {
+        if (darkText) {
+            view.setTextColor(DARK_TEXT)
+            view.setShadowLayer(0f, 0f, 0f, 0)
+        } else {
+            view.setTextColor(Color.WHITE)
+            view.setShadowLayer(SHADOW_RADIUS, 0f, SHADOW_DY, SHADOW_COLOR)
+        }
+    }
+
+    private fun updateSystemBars() {
+        val lightBars = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+            WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+        val wanted = if (darkText && !isDrawerOpen) lightBars else 0
+        window.insetsController?.setSystemBarsAppearance(wanted, lightBars)
+    }
+
+    private fun syncThemedWallpaper() {
+        val bounds = windowManager.currentWindowMetrics.bounds
+        ThemedWallpaper.sync(this, executor, settings.themedWallpaper, bounds.width(), bounds.height())
     }
 
     private fun applyWindowInsets() {
@@ -195,6 +244,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
     ) {
         loaded = true
         applySettings(savedSettings)
+        syncThemedWallpaper()
         widgets.restore(savedWidgets)
         pins.setLoaded(keys)
         pinnedEntries = resolved
@@ -212,6 +262,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
             renderPinned()
             publishAppsToDrawer()
         }
+        syncThemedWallpaper()
         widgets.start()
         drawer?.restoreViews()
         revealHome()
@@ -242,6 +293,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
     }
 
     private fun publishAppsToDrawer() {
+        folderPanel?.closeNow()
         drawer?.setApps(visibleApps())
     }
 
@@ -272,6 +324,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
 
     private fun bindPinned(view: TextView, entry: AppEntry) {
         view.text = if (settings.showLabels) entry.label else ""
+        styleForWallpaper(view)
         icons.bind(entry, view)
         view.setOnClickListener { actions.launch(entry, it) }
         view.setOnLongClickListener {
@@ -292,7 +345,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
 
     private fun createDrawer(): AppDrawer {
         val view = findViewById<ViewStub>(R.id.drawer_stub).inflate()
-        val created = AppDrawer(view, icons, actions::launch, actions::showMenu, ::closeDrawer)
+        val created = AppDrawer(view, icons, actions::launch, actions::showMenu, ::openFolder, ::closeDrawer)
         created.applySettings(settings)
         created.setApps(visibleApps())
         transition = DrawerTransition(root, home, view, ::onTransitionSettled).apply { applySettings(settings) }
@@ -301,17 +354,35 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
 
     private fun onTransitionSettled(open: Boolean) {
         if (open) drawer?.onOpened() else drawer?.onClosed()
+        updateSystemBars()
     }
 
     private fun openDrawer() {
         obtainDrawer()
         transition?.settle(open = true)
+        updateSystemBars()
     }
 
+    /** «Назад» закрывает слоями: сперва папку, затем список. */
     private fun closeDrawer() {
+        folderPanel?.takeIf { it.isOpen }?.let {
+            it.close()
+            return
+        }
         if (!isDrawerOpen) return
         drawer?.onClosing()
         transition?.settle(open = false)
+        updateSystemBars()
+    }
+
+    private fun openFolder(folder: GridItem.Folder) {
+        val panel = folderPanel ?: createFolderPanel().also { folderPanel = it }
+        panel.open(folder, settings)
+    }
+
+    private fun createFolderPanel(): FolderPanel {
+        val view = findViewById<ViewStub>(R.id.folder_stub).inflate()
+        return FolderPanel(view, icons, actions::launch, actions::showMenu)
     }
 
     private fun showHomeMenu(x: Float, y: Float) {
@@ -352,6 +423,10 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
         const val DATE_SKELETON = "EEEEdMMMM"
         const val REVEAL_SCALE = 0.96f
         const val REVEAL_MS = 260L
+        const val DARK_TEXT = 0xE61A1F36.toInt()
+        const val SHADOW_COLOR = 0x99000000.toInt()
+        const val SHADOW_RADIUS = 4f
+        const val SHADOW_DY = 1f
         const val ITEM_WIDGET = 1
         const val ITEM_WALLPAPER = 2
         const val ITEM_SETTINGS = 3

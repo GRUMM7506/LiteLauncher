@@ -5,14 +5,14 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 
-/** Адаптер страниц сетки. Приложения раскладываются по страницам уже здесь. */
+/** Адаптер страниц сетки. Ячейки раскладываются по страницам уже здесь. */
 class AppAdapter(
     private val icons: IconLoader,
-    private val onClick: (AppEntry, View) -> Unit,
-    private val onLongClick: (AppEntry, View) -> Unit,
+    private val onClick: (GridItem, View) -> Unit,
+    private val onLongClick: (GridItem, View) -> Unit,
 ) : RecyclerView.Adapter<AppAdapter.Holder>() {
 
-    private var pages = emptyList<List<AppEntry>>()
+    private var pages = emptyList<List<GridItem>>()
     private var columns = 1
     private var rows = 1
     private var showLabels = true
@@ -25,11 +25,11 @@ class AppAdapter(
 
     // Фильтрация меняет раскладку целиком, а стабильные ID сохраняют переиспользование страниц.
     @SuppressLint("NotifyDataSetChanged")
-    fun submit(apps: List<AppEntry>, columns: Int, rows: Int, showLabels: Boolean) {
+    fun submit(items: List<GridItem>, columns: Int, rows: Int, showLabels: Boolean) {
         this.columns = columns
         this.rows = rows
         this.showLabels = showLabels
-        pages = apps.chunked(columns * rows)
+        pages = items.chunked(columns * rows)
         notifyDataSetChanged()
     }
 

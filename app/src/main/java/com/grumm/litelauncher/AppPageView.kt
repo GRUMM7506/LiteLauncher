@@ -10,24 +10,24 @@ import android.widget.TextView
 class AppPageView(
     context: Context,
     private val icons: IconLoader,
-    private val onClick: (AppEntry, View) -> Unit,
-    private val onLongClick: (AppEntry, View) -> Unit,
+    private val onClick: (GridItem, View) -> Unit,
+    private val onLongClick: (GridItem, View) -> Unit,
 ) : ViewGroup(context) {
 
     private var columns = 1
     private var rows = 1
-    private var entries = emptyList<AppEntry>()
+    private var items = emptyList<GridItem>()
 
     init {
         layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         clipChildren = false
     }
 
-    fun bind(page: List<AppEntry>, columns: Int, rows: Int, showLabels: Boolean) {
+    fun bind(page: List<GridItem>, columns: Int, rows: Int, showLabels: Boolean) {
         if (columns != this.columns || rows != this.rows) requestLayout()
         this.columns = columns
         this.rows = rows
-        entries = page
+        items = page
         // Переиспользованная страница могла остаться в состоянии «уходит за край».
         alpha = 1f
         scaleX = 1f
@@ -35,9 +35,9 @@ class AppPageView(
         ensureCellCount(columns * rows)
         for (index in 0 until childCount) {
             val cell = getChildAt(index) as TextView
-            val entry = page.getOrNull(index)
-            cell.visibility = if (entry == null) INVISIBLE else VISIBLE
-            if (entry == null) cell.tag = null else bindCell(cell, entry, showLabels)
+            val item = page.getOrNull(index)
+            cell.visibility = if (item == null) INVISIBLE else VISIBLE
+            if (item == null) cell.tag = null else bindCell(cell, item, showLabels)
         }
     }
 
@@ -84,17 +84,20 @@ class AppPageView(
 
     private fun newCell(index: Int): View {
         val cell = LayoutInflater.from(context).inflate(R.layout.item_cell, this, false)
-        cell.setOnClickListener { view -> entries.getOrNull(index)?.let { onClick(it, view) } }
+        cell.setOnClickListener { view -> items.getOrNull(index)?.let { onClick(it, view) } }
         cell.setOnLongClickListener { view ->
-            entries.getOrNull(index)?.let { onLongClick(it, view) }
+            items.getOrNull(index)?.let { onLongClick(it, view) }
             true
         }
         return cell
     }
 
-    private fun bindCell(cell: TextView, entry: AppEntry, showLabels: Boolean) {
-        val label = if (showLabels) entry.label else ""
+    private fun bindCell(cell: TextView, item: GridItem, showLabels: Boolean) {
+        val label = if (showLabels) item.label else ""
         if (cell.text.toString() != label) cell.text = label
-        icons.bind(entry, cell)
+        when (item) {
+            is GridItem.App -> icons.bind(item.entry, cell)
+            is GridItem.Folder -> icons.bindFolder(item, cell)
+        }
     }
 }

@@ -72,4 +72,10 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout="@layout/view_drawer" />
+
+    <ViewStub
+        android:id="@+id/folder_stub"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout="@layout/view_folder" />
 </com.grumm.litelauncher.GestureRootLayout>
