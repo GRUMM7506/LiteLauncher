@@ -10,9 +10,13 @@
     <string name="menu_settings">Launcher settings</string>
     <string name="menu_wallpaper">Wallpaper</string>
     <string name="menu_add_widget">Add widget</string>
-    <string name="menu_widget_taller">Make taller</string>
-    <string name="menu_widget_shorter">Make shorter</string>
-    <string name="menu_widget_remove">Remove widget</string>
+    <string name="widget_size">Size: %1$d×%2$d</string>
+    <string name="widget_add">Add to home screen</string>
+    <string name="widget_narrower">Narrower</string>
+    <string name="widget_wider">Wider</string>
+    <string name="widget_shorter">Shorter</string>
+    <string name="widget_taller">Taller</string>
+    <string name="widget_no_space">No room for this widget on the home screen</string>
     <string name="pin_limit">You can pin up to %d apps</string>
     <string name="launch_failed">Could not open the app</string>
     <string name="no_widgets">No widgets available</string>

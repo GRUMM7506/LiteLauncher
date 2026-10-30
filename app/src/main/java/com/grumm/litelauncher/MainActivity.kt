@@ -65,7 +65,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
 
     override val isDrawerOpen get() = transition?.isOpen == true
     override val swipeDownEnabled get() = settings.swipeDownShade
-    override val isFolderOpen get() = folderPanel?.isOpen == true
+    override val gesturesSuspended get() = folderPanel?.isOpen == true || widgets.isEditing
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -98,6 +98,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
 
     override fun onStop() {
         unregisterReceiver(timeReceiver)
+        widgets.dismissOverlays()
         folderPanel?.closeNow()
         drawer?.onClosing()
         transition?.snapClosed()
@@ -115,6 +116,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
     /** Нажатие «Домой», пока лаунчер уже на экране. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        widgets.dismissOverlays()
         folderPanel?.closeNow()
         closeDrawer()
     }
@@ -157,9 +159,13 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
 
     override fun onSwipeDown() = expandNotificationShade()
 
-    override fun onTap() = openDrawer()
+    override fun onTap() {
+        if (widgets.isEditing) widgets.endEditing() else openDrawer()
+    }
 
-    override fun onLongPress(x: Float, y: Float) = showHomeMenu(x, y)
+    override fun onLongPress(x: Float, y: Float) {
+        if (widgets.isEditing) widgets.endEditing() else showHomeMenu(x, y)
+    }
 
     private fun bindViews() {
         root = findViewById(R.id.root)
@@ -238,7 +244,7 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
 
     private fun onLoaded(
         savedSettings: LauncherSettings,
-        savedWidgets: List<Pair<Int, Int>>,
+        savedWidgets: List<WidgetPanel.WidgetCellEntry>,
         keys: List<String>,
         resolved: List<AppEntry>,
     ) {
@@ -365,6 +371,10 @@ class MainActivity : Activity(), GestureRootLayout.Listener {
 
     /** «Назад» закрывает слоями: сперва папку, затем список. */
     private fun closeDrawer() {
+        if (widgets.isEditing) {
+            widgets.endEditing()
+            return
+        }
         folderPanel?.takeIf { it.isOpen }?.let {
             it.close()
             return

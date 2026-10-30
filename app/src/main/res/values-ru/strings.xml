@@ -9,9 +9,13 @@
     <string name="menu_settings">Настройки лаунчера</string>
     <string name="menu_wallpaper">Обои</string>
     <string name="menu_add_widget">Добавить виджет</string>
-    <string name="menu_widget_taller">Сделать выше</string>
-    <string name="menu_widget_shorter">Сделать ниже</string>
-    <string name="menu_widget_remove">Убрать виджет</string>
+    <string name="widget_size">Размер: %1$d×%2$d</string>
+    <string name="widget_add">Добавить на главный экран</string>
+    <string name="widget_narrower">Уже</string>
+    <string name="widget_wider">Шире</string>
+    <string name="widget_shorter">Ниже</string>
+    <string name="widget_taller">Выше</string>
+    <string name="widget_no_space">На главном экране нет места для этого виджета</string>
     <string name="pin_limit">Можно закрепить не более %d приложений</string>
     <string name="launch_failed">Не удалось открыть приложение</string>
     <string name="no_widgets">Нет доступных виджетов</string>

@@ -17,7 +17,9 @@ class GestureRootLayout(context: Context, attrs: AttributeSet?) : FrameLayout(co
     interface Listener {
         val isDrawerOpen: Boolean
         val swipeDownEnabled: Boolean
-        val isFolderOpen: Boolean
+
+        /** Открыта папка или идёт правка виджета: жесты главного экрана не работают. */
+        val gesturesSuspended: Boolean
 
         /** Если переход ещё идёт — останавливает его и возвращает true: новый жест подхватит его. */
         fun catchMotion(): Boolean
@@ -45,7 +47,7 @@ class GestureRootLayout(context: Context, attrs: AttributeSet?) : FrameLayout(co
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
         val listener = listener ?: return false
-        if (listener.isFolderOpen) return false
+        if (listener.gesturesSuspended) return false
         trackVelocity(ev)
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -104,6 +106,7 @@ class GestureRootLayout(context: Context, attrs: AttributeSet?) : FrameLayout(co
     }
 
     private fun wantsDrag(ev: MotionEvent, listener: Listener): Boolean {
+        if (listener.gesturesSuspended) return false
         val down = ev.y > downY
         if (listener.isDrawerOpen) return down
         if (listener.isDragBlocked(downX, downY)) return false
