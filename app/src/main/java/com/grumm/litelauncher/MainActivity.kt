@@ -71,7 +71,7 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         unregisterReceiver(timeReceiver)
-        drawer?.closeNow()
+        drawer?.close()
         super.onStop()
     }
 

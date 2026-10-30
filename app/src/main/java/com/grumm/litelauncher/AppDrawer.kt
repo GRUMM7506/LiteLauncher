@@ -1,9 +1,5 @@
 package com.grumm.litelauncher
 
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
-import android.animation.ValueAnimator
-import android.graphics.drawable.ColorDrawable
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.KeyEvent
@@ -16,7 +12,10 @@ import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
-/** Полноэкранный список приложений с поиском. Подложка рисуется на корневом контейнере. */
+/**
+ * Полноэкранный список приложений с поиском. Подложка рисуется на корневом контейнере.
+ * Открывается без анимации: при программном рендеринге полноэкранная альфа даёт кадры по 33 мс.
+ */
 class AppDrawer(
     private val view: View,
     private val root: ViewGroup,
@@ -30,14 +29,11 @@ class AppDrawer(
     private val list = view.findViewById<RecyclerView>(R.id.list)
     private val adapter = AppAdapter(icons, onLaunch, onMenu)
     private val imm = view.context.getSystemService<InputMethodManager>()!!
-    private val scrim = ColorDrawable(SCRIM_COLOR).apply { alpha = 0 }
     private var apps = emptyList<AppEntry>()
-    private var fade: ValueAnimator? = null
 
     val isOpen get() = view.isVisible
 
     init {
-        root.background = scrim
         list.setHasFixedSize(true)
         list.itemAnimator = null
         list.layoutManager = LinearLayoutManager(view.context)
@@ -56,65 +52,29 @@ class AppDrawer(
     fun open() {
         if (isOpen) return
         if (list.adapter == null) list.adapter = adapter
+        root.setBackgroundColor(SCRIM_COLOR)
+        home.visibility = View.INVISIBLE
         view.isVisible = true
         search.requestFocus()
         search.post { imm.showSoftInput(search, InputMethodManager.SHOW_IMPLICIT) }
-        animate(from = 0f, to = 1f) { home.visibility = View.INVISIBLE }
     }
 
-    fun close() = closeInternal(animated = true)
-
-    fun closeNow() = closeInternal(animated = false)
+    fun close() {
+        if (!isOpen) return
+        imm.hideSoftInputFromWindow(search.windowToken, 0)
+        search.text.clear()
+        root.background = null
+        home.visibility = View.VISIBLE
+        view.isVisible = false
+        list.scrollToPosition(0)
+        onClosed()
+    }
 
     /** Отдаёт строки и их битмапы, пока лаунчер скрыт. Следующее открытие создаст их заново. */
     fun releaseViews() {
         if (isOpen) return
         list.adapter = null
         list.recycledViewPool.clear()
-    }
-
-    private fun closeInternal(animated: Boolean) {
-        if (!isOpen) return
-        imm.hideSoftInputFromWindow(search.windowToken, 0)
-        search.text.clear()
-        home.visibility = View.VISIBLE
-        fade?.cancel()
-        if (animated) animate(from = 1f, to = 0f, ::finishClose) else finishClose()
-    }
-
-    private fun finishClose() {
-        scrim.alpha = 0
-        view.alpha = 1f
-        view.isVisible = false
-        list.scrollToPosition(0)
-        onClosed()
-    }
-
-    private fun animate(from: Float, to: Float, onEnd: () -> Unit) {
-        fade?.cancel()
-        fade = ValueAnimator.ofFloat(from, to).apply {
-            duration = FADE_MS
-            addUpdateListener { setFade(it.animatedValue as Float) }
-            addListener(onEndListener(onEnd))
-            start()
-        }
-    }
-
-    private fun setFade(value: Float) {
-        view.alpha = value
-        scrim.alpha = (value * 255).toInt()
-    }
-
-    private fun onEndListener(onEnd: () -> Unit) = object : AnimatorListenerAdapter() {
-        private var cancelled = false
-
-        override fun onAnimationCancel(animation: Animator) {
-            cancelled = true
-        }
-
-        override fun onAnimationEnd(animation: Animator) {
-            if (!cancelled) onEnd()
-        }
     }
 
     private fun applyFilter() {
@@ -145,6 +105,5 @@ class AppDrawer(
 
     private companion object {
         const val SCRIM_COLOR = 0xB3000000.toInt()
-        const val FADE_MS = 90L
     }
 }
