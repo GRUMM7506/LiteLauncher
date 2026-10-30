@@ -40,6 +40,10 @@ Requires Android Studio's JDK and the Android SDK.
 
 Without a `keystore.properties` file, the release build is signed with your debug key.
 
+## License
+
+[MIT](LICENSE)
+
 ## Русский
 
 Маленький и быстрый лаунчер для Android с плавным управлением за пальцем. Без доступа к сети и аналитики, около 300 КБ.
